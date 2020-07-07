@@ -98,7 +98,7 @@ void ProcessData(Seq *seq, struct read *rd, lint nN, lint nS, ushort flag)
 }
 
 //-------------------------------------------------------------------------
-Seq *ReadFASTASequences(char *file, lint *nN, lint *nS, struct read *rd, ushort flag)
+void ReadFASTASequences(char *file, lint *nN, lint *nS, struct read *rd, ushort flag)
 {
   Seq *seq;
   int len;
@@ -137,8 +137,8 @@ Seq *ReadFASTASequences(char *file, lint *nN, lint *nS, struct read *rd, ushort 
   }
 
   ProcessData(seq, rd, lnN, *nS, flag);
+  free(seq);
 
   *nN = lnN + *nS;
 
-  return seq;
 }
