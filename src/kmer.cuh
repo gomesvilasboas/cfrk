@@ -3,9 +3,9 @@
 
 #include "tipos.h"
 
-Seq *ReadFASTASequences(char *file, lint *nN, lint *nS, struct read *rd, ushort flag);
+void ReadFASTASequences(char *file, lint *nN, lint *nS, struct read *rd, ushort flag);
 
-void kmer_main(Read *rd, lint nN, lint nS, int k, ushort device);
+void kmer_main(Read *rd, lint nN, lint nS, int k, ushort device, cudaStream_t stream);
 
 __global__ void ResetFreq(Freq *freq, ushort offset, int val, int nF);
 

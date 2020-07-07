@@ -13,16 +13,7 @@ Istitution: National Laboratory for Scientific Computing
 #include "kmer.cuh"
 #include "tipos.h"
 
-//*** Global Variables ***
-struct read *chunk;
-lint *nS, *nN;
-int offset;
-int device;
-int k;
-char file_out[512];
-//************************
-
-void PrintFreqRemain(Seq *seq, Read *chunk, int nChunk, lint nS, lint nN)
+void PrintFreqRemain(Read *chunk, int nChunk, lint nS, lint nN)
 {
   //FILE *out;
   //char str[256];
@@ -31,7 +22,7 @@ void PrintFreqRemain(Seq *seq, Read *chunk, int nChunk, lint nS, lint nN)
   int seqCount = 0;
   for (int i = 0; i < nChunk; i++)
   {
-    int end = (nN - (nS * (k-1)));
+    //int end = (nN - (nS * (k-1)));
     for (int j = 0; j < nN; j++)
     {
       //if (chunk[i].freq[j].kmer != -1)
@@ -47,7 +38,7 @@ void PrintFreqRemain(Seq *seq, Read *chunk, int nChunk, lint nS, lint nN)
   //fclose(out);
 }
 
-void PrintFreq(Seq *seq, Read *chunk, int nChunk)
+void PrintFreq(Read *chunk, int nChunk)
 {
   //FILE *out;
   //char str[256];
@@ -117,7 +108,7 @@ int SelectDevice(int devCount)
   return device;
 }
 
-struct read* SelectChunkRemain(struct read *rd, ushort chunkSize, ushort it, lint max, lint gnS, lint *nS, lint gnN, lint *nN, int nt)
+struct read* SelectChunkRemain(struct read *rd, ushort chunkSize, ushort it, lint max, lint gnS, lint *nS, lint gnN, lint *nN, int nt, int k)
 {
   struct read *chunk;
   lint i;
@@ -161,13 +152,15 @@ struct read* SelectChunkRemain(struct read *rd, ushort chunkSize, ushort it, lin
     chunk->start[i] = chunk->start[i-1]+(chunk->length[i-1]+1);
   }
 
+  cudaMallocHost(&chunk->freq, (length - (max * (k-1))) * sizeof(Freq));
+
   *nN = length;
   *nS = max;
   return chunk;
 }
 
 
-void SelectChunk(struct read *chunk, const int nChunk, struct read *rd, ushort chunkSize, lint max, lint gnS, lint *nS, lint gnN, lint *nN, int nt)
+void SelectChunk(struct read *chunk, const int nChunk, struct read *rd, ushort chunkSize, lint max, lint gnS, lint *nS, lint gnN, lint *nN, int nt, int k)
 {
   lint i, j, it;
 
@@ -186,9 +179,9 @@ void SelectChunk(struct read *chunk, const int nChunk, struct read *rd, ushort c
       length += rd->length[id]+1;
     }
 
-    cudaMallocHost((void**)&chunk[it].data, sizeof(char)*length);
-    cudaMallocHost((void**)&chunk[it].length, sizeof(int)*chunkSize);
-    cudaMallocHost((void**)&chunk[it].start, sizeof(lint)*chunkSize);
+    cudaMallocHost(&chunk[it].data, sizeof(char)*length);
+    cudaMallocHost(&chunk[it].length, sizeof(int)*chunkSize);
+    cudaMallocHost(&chunk[it].start, sizeof(lint)*chunkSize);
 
     // Copy rd->data to chunk->data
     lint start = rd->start[chunkSize*it];
@@ -210,37 +203,23 @@ void SelectChunk(struct read *chunk, const int nChunk, struct read *rd, ushort c
       chunk[it].start[i] = chunk[it].start[i-1]+(chunk[it].length[i-1]+1);
     }
 
+    cudaMallocHost(&chunk[it].freq, (length - (max * (k-1))) * sizeof(Freq));
+
     nN[it] = length;
     nS[it] = max;
   }
 }
 
-void *LaunchKmer(void* threadId)
-{
-
-  lint tid = (lint)threadId;
-  int start = tid * offset;
-  int end = start+offset;
-
-  //printf("\t\ttid: %d\n", tid);
-
-  //DeviceInfo(tid);
-
-  for (int i = start; i < end; i++)
-  {
-    //printf("%d\n", i);
-    kmer_main(&chunk[i], nN[i], nS[i], k, device);
-  }
-
-  return NULL;
-}
-
 int main(int argc, char* argv[])
 {
-
+  struct read *chunk;
+  lint *nS, *nN;
+  int device;
+  int k;
+  char file_out[512];
   lint gnN, gnS, chunkSize = 8192;
   int devCount;
-  int nt = 12;
+  int nt;// = 12;
 
   if ( argc < 4)
   {
@@ -250,10 +229,10 @@ int main(int argc, char* argv[])
   cudaDeviceReset();
 
   k = atoi(argv[3]);
-  if (argc == 5)
-  nt = atoi(argv[4]);
-  if (argc == 6)
-  chunkSize = atoi(argv[5]);
+  if (argc >= 5) nt = atoi(argv[4]);
+  if (argc >= 6) chunkSize = atoi(argv[5]);
+
+  printf("nt: %d, chunkSize: %d\n", nt, chunkSize);
 
   cudaGetDeviceCount(&devCount);
   //DeviceInfo(device);
@@ -267,7 +246,7 @@ int main(int argc, char* argv[])
   struct read *rd;
   cudaMallocHost((void**)&rd, sizeof(struct read));
   // rd = (struct read*)malloc(sizeof(struct read));
-  Seq *seq = ReadFASTASequences(argv[1], &gnN, &gnS, rd, 1);
+  ReadFASTASequences(argv[1], &gnN, &gnS, rd, 1);
   //printf("\nnS: %ld, nN: %ld\n", gnS, gnN);
   lint et = time(NULL);
 
@@ -278,45 +257,45 @@ int main(int argc, char* argv[])
   cudaMallocHost((void**)&chunk, sizeof(struct read)*nChunk);
   cudaMallocHost((void**)&nS, sizeof(lint)*nChunk);
   cudaMallocHost((void**)&nN, sizeof(lint)*nChunk);
-  SelectChunk(chunk, nChunk, rd, chunkSize, chunkSize, gnS, nS, gnN, nN, nt);
-
-  device = SelectDevice(devCount);
-  offset = floor(nChunk/devCount);
-  pthread_t threads[devCount];
-
-  omp_set_num_threads(nt);
-  #pragma omp parallel for
-  for (int i = 0; i < nChunk; i++)
-  {
-    kmer_main(&chunk[i], nN[i], nS[i], k, device);
-  }
-
-
-  //for (i = 0; i < nt; i++)
-  //{
-  //  pthread_create(&threads[i], NULL, LaunchKmer, (void*)i);
-  //}
-
-  //for (i = 0; i < nt; i++)
-  //{
-  //  pthread_join(threads[i], NULL);
-  //}
-
-  int threadRemain = nChunk - (offset*devCount);
-  if (threadRemain > 0)
-  {
-    kmer_main(&chunk[nChunk-1], nN[nChunk-1], nS[nChunk-1], k, device);
-  }
-
+  SelectChunk(chunk, nChunk, rd, chunkSize, chunkSize, gnS, nS, gnN, nN, nt, k);
   int chunkRemain = abs(gnS - (nChunk*chunkSize));
   lint rnS, rnN;
-  struct read *chunk_remain = SelectChunkRemain(rd, chunkSize, nChunk, chunkRemain, gnS, &rnS, gnN, &rnN, nt);
-  kmer_main(chunk_remain, rnN, rnS, k, device);
+  struct read *chunk_remain = SelectChunkRemain(rd, chunkSize, nChunk, chunkRemain, gnS, &rnS, gnN, &rnN, nt, k);
+  //cudaFree(rd);
+
+  device = SelectDevice(devCount);
+
+  //cudaStream_t stream;
+  //cudaStreamCreate(&stream);
+  cudaStream_t stream[nChunk];
+  for (int i = 0; i < nChunk; i++)
+  {
+    cudaStreamCreate(&stream[i]);
+  }
+  omp_set_num_threads(nt);
+  #pragma omp parallel
+  {
+    #pragma omp for firstprivate (chunk, nN, nS, stream)
+    for (int i = 0; i < nChunk; i++)
+    {
+      kmer_main(&chunk[i], nN[i], nS[i], k, device, stream[i]);
+    }
+  }
+
+
+
+
+  //cudaDeviceSynchronize();
+
+  //cudaStream_t streamRemain;
+  //cudaStreamCreate(&streamRemain);
+  //puts("Remain");
+  //kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
 
   // st = time(NULL);
-  PrintFreq(seq, chunk, nChunk);
+  //PrintFreq(chunk, nChunk);
   // et = time(NULL);
-  //PrintFreqRemain(seq, chunk_remain, 1, rnS, rnN);
+  //PrintFreqRemain(chunk_remain, 1, rnS, rnN);
   // printf("\n\t\tWriting time: %ld\n", (et-st));
 
   return 0;
