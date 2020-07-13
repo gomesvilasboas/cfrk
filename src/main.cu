@@ -13,7 +13,7 @@ Istitution: National Laboratory for Scientific Computing
 #include "kmer.cuh"
 #include "tipos.h"
 
-void PrintFreqRemain(Read *chunk, int nChunk, lint nS, lint nN)
+void PrintFreqRemain(Read *chunk, int nChunk, lint nS, lint nN, int k)
 {
   //FILE *out;
   //char str[256];
@@ -22,37 +22,36 @@ void PrintFreqRemain(Read *chunk, int nChunk, lint nS, lint nN)
   int seqCount = 0;
   for (int i = 0; i < nChunk; i++)
   {
-    //int end = (nN - (nS * (k-1)));
-    for (int j = 0; j < nN; j++)
-    {
-      //if (chunk[i].freq[j].kmer != -1)
-        //printf("%d:%d ", chunk[i].freq[j].kmer, chunk[i].freq[j].count);
-      if (chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
-      {
-        seqCount++;
-        //printf("\n");
-      }
-    }
-  }
-  printf("PrintFreqRemain:seqCount = %d\n", seqCount);
-  //fclose(out);
-}
-
-void PrintFreq(Read *chunk, int nChunk)
-{
-  //FILE *out;
-  //char str[256];
-
-  //out = fopen(file_out, "w");
-  int seqCount = 0;
-  for (int i = 0; i < nChunk; i++)
-  {
-    int end = 100;//(nN[i] - (nS[i] * (k-1)));
+    int end = (nN - (nS * (k-1)));
     for (int j = 0; j < end; j++)
     {
       if (chunk[i].freq[j].kmer != -1)
         printf("%ld:%d ", chunk[i].freq[j].kmer, chunk[i].freq[j].count);
-      if (chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
+      if (j < (end-1) && chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
+      {
+        seqCount++;
+        printf("\n");
+      }
+    }
+  }
+  //fclose(out);
+}
+
+void PrintFreq(Read *chunk, int nChunk, lint *nS, lint *nN, int k)
+{
+  //FILE *out;
+  //char str[256];
+
+  //out = fopen(file_out, "w");
+  int seqCount = 0;
+  for (int i = 0; i < nChunk; i++)
+  {
+    int end = (nN[i] - (nS[i] * (k-1)));
+    for (int j = 0; j < end; j++)
+    {
+      if (chunk[i].freq[j].kmer != -1)
+        printf("%ld:%d ", chunk[i].freq[j].kmer, chunk[i].freq[j].count);
+      if (j < (end-1) && chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
       {
         seqCount++;
         printf("\n");
@@ -272,6 +271,7 @@ int main(int argc, char* argv[])
   {
     cudaStreamCreate(&stream[i]);
   }
+
   omp_set_num_threads(nt);
   #pragma omp parallel
   {
@@ -282,20 +282,19 @@ int main(int argc, char* argv[])
     }
   }
 
-
-
-
   //cudaDeviceSynchronize();
 
-  //cudaStream_t streamRemain;
-  //cudaStreamCreate(&streamRemain);
-  //puts("Remain");
-  //kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
+  cudaStream_t streamRemain;
+  cudaStreamCreate(&streamRemain);
+  puts("Remain");
+  kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
 
   // st = time(NULL);
-  //PrintFreq(chunk, nChunk);
+  PrintFreq(chunk, nChunk, nS, nN, k);
   // et = time(NULL);
-  //PrintFreqRemain(chunk_remain, 1, rnS, rnN);
+  //puts("\n\nPrintFreqRemain");
+  PrintFreqRemain(chunk_remain, 1, rnS, rnN, k);
+  printf("\n");
   // printf("\n\t\tWriting time: %ld\n", (et-st));
 
   return 0;
