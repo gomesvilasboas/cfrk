@@ -13,31 +13,31 @@ Istitution: National Laboratory for Scientific Computing
 #include "kmer.cuh"
 #include "tipos.h"
 
-void PrintFreqRemain(Read *chunk, int nChunk, int chunkSize, int k)
+void PrintFreqRemain(Read *chunk, int nChunk, int chunkSize, int k, char *fileOut)
 {
-  //FILE *out;
+  FILE *output;
   //char str[256];
 
-  //out = fopen(file_out, "w");
+  output = fopen(fileOut, "a");
   for (int i = 0; i < chunkSize; i++)
   {
     int end = chunk->start[i] + chunk->length[i];
     for (int j = chunk->start[i]; j < end; j++)
     {
       if (chunk->freq[j].kmer != -1)
-      printf("%ld:%d ", chunk->freq[j].kmer, chunk->freq[j].count);
+      fprintf(output, "%ld:%d ", chunk->freq[j].kmer, chunk->freq[j].count);
     }
-    printf("\n");
+    fprintf(output, "\n");
   }
-  //fclose(out);
+  fclose(output);
 }
 
-void PrintFreq(Read *chunk, int nChunk, int chunkSize, int k)
+void PrintFreq(Read *chunk, int nChunk, int chunkSize, int k, char *fileOut)
 {
-  //FILE *out;
+  FILE *output;
   //char str[256];
 
-  //out = fopen(file_out, "w");
+  output = fopen(fileOut, "w");
   for (int i = 0; i < nChunk; i++)
   {
     for (int j = 0; j < chunkSize; j++)
@@ -46,12 +46,12 @@ void PrintFreq(Read *chunk, int nChunk, int chunkSize, int k)
       for (int k = chunk[i].start[j]; k < end; k++)
       {
         if (chunk[i].freq[k].kmer != -1)
-          printf("%ld:%d ", chunk[i].freq[k].kmer, chunk[i].freq[k].count);
+          fprintf(output, "%ld:%d ", chunk[i].freq[k].kmer, chunk[i].freq[k].count);
       }
-      printf("\n");
+      fprintf(output, "\n");
     }
   }
-  //fclose(out);
+  fclose(output);
 }
 
 void DeviceInfo(uint8_t device)
@@ -208,7 +208,7 @@ int main(int argc, char* argv[])
   lint *nS, *nN;
   int device;
   int k;
-  char file_out[512];
+  char fileOut[512];
   lint gnN, gnS, chunkSize = 8192;
   int devCount;
   int nt = 12;
@@ -229,7 +229,7 @@ int main(int argc, char* argv[])
   cudaGetDeviceCount(&devCount);
   //DeviceInfo(device);
 
-  strcpy(file_out, argv[2]);
+  strcpy(fileOut, argv[2]);
 
   //printf("\ndataset: %s, out: %s, k: %d, chunkSize: %d\n", argv[1], file_out, k, chunkSize);
 
@@ -283,10 +283,10 @@ int main(int argc, char* argv[])
   kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
 
   // st = time(NULL);
-  PrintFreq(chunk, nChunk, chunkSize, k);
+  PrintFreq(chunk, nChunk, chunkSize, k, fileOut);
   // et = time(NULL);
   //puts("\n\nPrintFreqRemain");
-  PrintFreqRemain(chunk_remain, 1, chunkRemain, k);
+  PrintFreqRemain(chunk_remain, 1, chunkRemain, k, fileOut);
   //printf("\n");
   // printf("\n\t\tWriting time: %ld\n", (et-st));
 
