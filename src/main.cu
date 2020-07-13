@@ -13,49 +13,42 @@ Istitution: National Laboratory for Scientific Computing
 #include "kmer.cuh"
 #include "tipos.h"
 
-void PrintFreqRemain(Read *chunk, int nChunk, lint nS, lint nN, int k)
+void PrintFreqRemain(Read *chunk, int nChunk, int chunkSize, int k)
 {
   //FILE *out;
   //char str[256];
 
   //out = fopen(file_out, "w");
-  int seqCount = 0;
-  for (int i = 0; i < nChunk; i++)
+  for (int i = 0; i < chunkSize; i++)
   {
-    int end = (nN - (nS * (k-1)));
-    for (int j = 0; j < end; j++)
+    int end = chunk->start[i] + chunk->length[i];
+    for (int j = chunk->start[i]; j < end; j++)
     {
-      if (chunk[i].freq[j].kmer != -1)
-        printf("%ld:%d ", chunk[i].freq[j].kmer, chunk[i].freq[j].count);
-      if (j < (end-1) && chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
-      {
-        seqCount++;
-        printf("\n");
-      }
+      if (chunk->freq[j].kmer != -1)
+      printf("%ld:%d ", chunk->freq[j].kmer, chunk->freq[j].count);
     }
+    printf("\n");
   }
   //fclose(out);
 }
 
-void PrintFreq(Read *chunk, int nChunk, lint *nS, lint *nN, int k)
+void PrintFreq(Read *chunk, int nChunk, int chunkSize, int k)
 {
   //FILE *out;
   //char str[256];
 
   //out = fopen(file_out, "w");
-  int seqCount = 0;
   for (int i = 0; i < nChunk; i++)
   {
-    int end = (nN[i] - (nS[i] * (k-1)));
-    for (int j = 0; j < end; j++)
+    for (int j = 0; j < chunkSize; j++)
     {
-      if (chunk[i].freq[j].kmer != -1)
-        printf("%ld:%d ", chunk[i].freq[j].kmer, chunk[i].freq[j].count);
-      if (j < (end-1) && chunk[i].freq[j+1].kmer != -1 && chunk[i].freq[j].kmer == -1)
+      int end = chunk[i].start[j] + chunk[i].length[j];
+      for (int k = chunk[i].start[j]; k < end; k++)
       {
-        seqCount++;
-        printf("\n");
+        if (chunk[i].freq[k].kmer != -1)
+          printf("%ld:%d ", chunk[i].freq[k].kmer, chunk[i].freq[k].count);
       }
+      printf("\n");
     }
   }
   //fclose(out);
@@ -151,7 +144,7 @@ struct read* SelectChunkRemain(struct read *rd, ushort chunkSize, ushort it, lin
     chunk->start[i] = chunk->start[i-1]+(chunk->length[i-1]+1);
   }
 
-  cudaMallocHost(&chunk->freq, (length - (max * (k-1))) * sizeof(Freq));
+  cudaMallocHost(&chunk->freq, length * sizeof(Freq));
 
   *nN = length;
   *nS = max;
@@ -202,7 +195,7 @@ void SelectChunk(struct read *chunk, const int nChunk, struct read *rd, ushort c
       chunk[it].start[i] = chunk[it].start[i-1]+(chunk[it].length[i-1]+1);
     }
 
-    cudaMallocHost(&chunk[it].freq, (length - (max * (k-1))) * sizeof(Freq));
+    cudaMallocHost(&chunk[it].freq, length * sizeof(Freq));
 
     nN[it] = length;
     nS[it] = max;
@@ -218,7 +211,7 @@ int main(int argc, char* argv[])
   char file_out[512];
   lint gnN, gnS, chunkSize = 8192;
   int devCount;
-  int nt;// = 12;
+  int nt = 12;
 
   if ( argc < 4)
   {
@@ -231,7 +224,7 @@ int main(int argc, char* argv[])
   if (argc >= 5) nt = atoi(argv[4]);
   if (argc >= 6) chunkSize = atoi(argv[5]);
 
-  printf("nt: %d, chunkSize: %d\n", nt, chunkSize);
+  //printf("nt: %d, chunkSize: %d\n", nt, chunkSize);
 
   cudaGetDeviceCount(&devCount);
   //DeviceInfo(device);
@@ -286,15 +279,15 @@ int main(int argc, char* argv[])
 
   cudaStream_t streamRemain;
   cudaStreamCreate(&streamRemain);
-  puts("Remain");
+  //puts("Remain");
   kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
 
   // st = time(NULL);
-  PrintFreq(chunk, nChunk, nS, nN, k);
+  PrintFreq(chunk, nChunk, chunkSize, k);
   // et = time(NULL);
   //puts("\n\nPrintFreqRemain");
-  PrintFreqRemain(chunk_remain, 1, rnS, rnN, k);
-  printf("\n");
+  PrintFreqRemain(chunk_remain, 1, chunkRemain, k);
+  //printf("\n");
   // printf("\n\t\tWriting time: %ld\n", (et-st));
 
   return 0;

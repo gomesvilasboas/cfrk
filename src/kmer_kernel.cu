@@ -75,7 +75,7 @@ __global__ void ComputeFreq(lint *kmer, Freq *freq, lint *start, int *length, li
     int end = start[idx] + (length[idx] + 1);
     for (int i = start[idx]; i < end; i++)// Each kmer
     {
-      for (int j = start[idx]; j < (start[idx] + (length[idx]-k-1)) && j < nF; j++)
+      for (int j = start[idx]; j < end; j++)
       {
         if (freq[j].kmer == -1)
         {

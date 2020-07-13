@@ -44,7 +44,7 @@ void kmer_main(Read *rd, lint nN, lint nS, int k, ushort device, cudaStream_t st
   size[0] = nN * sizeof(char);// dSeq and Seq size
   size[1] = nN * sizeof(lint); // dKmer and kmer size
   size[2] = nS * sizeof(int);  // dLength
-  size[3] = (nN - (nS *(k-1))) * sizeof(Freq);// Freq
+  size[3] = nN * sizeof(Freq);// Freq
   size[4] = nS * sizeof(lint); // dStart
   totalsize = size[0] + size[1] + (size[2] * 2) + size[3];
 
@@ -87,10 +87,10 @@ void kmer_main(Read *rd, lint nN, lint nS, int k, ushort device, cudaStream_t st
     offset[2] = (nS / grid[2]) + 1;
   }
 
-  int nF = (nN - (nS *(k-1)));
+  int nF = nN;// - (nS * (k - 1));
   //printf("\nnS: %ld, nN: %ld, nF: %d\n", nS, nN, nF);
   block[3] = maxThreadDim;
-  grid[3] = (nF/1024)+1;
+  grid[3] = ceil(nF/1024)+1;
   if (grid[3] > maxGridSize)
   {
     grid[3] = maxGridSize;
