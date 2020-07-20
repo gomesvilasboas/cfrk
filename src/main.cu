@@ -206,11 +206,10 @@ int main(int argc, char* argv[])
 {
   struct read *chunk;
   lint *nS, *nN;
-  int device;
   int k;
   char fileOut[512];
   lint gnN, gnS, chunkSize = 8192;
-  int devCount;
+  int deviceCount;
   int nt = 12;
 
   if ( argc < 4)
@@ -226,7 +225,7 @@ int main(int argc, char* argv[])
 
   //printf("nt: %d, chunkSize: %d\n", nt, chunkSize);
 
-  cudaGetDeviceCount(&devCount);
+  cudaGetDeviceCount(&deviceCount);
   //DeviceInfo(device);
 
   strcpy(fileOut, argv[2]);
@@ -255,22 +254,21 @@ int main(int argc, char* argv[])
   struct read *chunk_remain = SelectChunkRemain(rd, chunkSize, nChunk, chunkRemain, gnS, &rnS, gnN, &rnN, nt, k);
   //cudaFree(rd);
 
-  device = SelectDevice(devCount);
+  //device = SelectDevice(devCount);
 
-  //cudaStream_t stream;
-  //cudaStreamCreate(&stream);
   cudaStream_t stream[nChunk];
   for (int i = 0; i < nChunk; i++)
   {
     cudaStreamCreate(&stream[i]);
   }
 
-  omp_set_num_threads(nt);
-  #pragma omp parallel
+  int deviceOffset = floor(nChunk / deviceCount) + 1;
+  #pragma omp parallel num_threads(nt)
   {
     #pragma omp for firstprivate (chunk, nN, nS, stream)
     for (int i = 0; i < nChunk; i++)
     {
+      int device = floor(i / deviceOffset);
       kmer_main(&chunk[i], nN[i], nS[i], k, device, stream[i]);
     }
   }
@@ -280,7 +278,7 @@ int main(int argc, char* argv[])
   cudaStream_t streamRemain;
   cudaStreamCreate(&streamRemain);
   //puts("Remain");
-  kmer_main(chunk_remain, rnN, rnS, k, device, streamRemain);
+  kmer_main(chunk_remain, rnN, rnS, k, (deviceCount - 1), streamRemain);
 
   // st = time(NULL);
   PrintFreq(chunk, nChunk, chunkSize, k, fileOut);
